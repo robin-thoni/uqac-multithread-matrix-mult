@@ -4,6 +4,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <string.h>
+#include <math.h>
 #include <pthread.h>
 
 struct matrix
@@ -177,13 +178,13 @@ s_matrix matrix_mult_parallel(s_matrix mat1, s_matrix mat2, unsigned thread_coun
     mat = matrix_generate(mat1.m, mat2.n, 0);
     unsigned scalars_count = mat1.m * mat2.n;
     unsigned distribution[thread_count];
-    unsigned scalar_start = 0;
-    //unsigned scalar_start = distribution[0];
     matrix_get_thread_scalars_distribution(scalars_count, thread_count, distribution);
+    //unsigned scalar_start = 0;
+    unsigned scalar_start = distribution[0];
     pthread_t threads[thread_count];
-    //threads[0] = 0;
+    threads[0] = 0;
 
-    for (unsigned thread_number = 0; thread_number < thread_count; ++thread_number) {
+    for (unsigned thread_number = 1; thread_number < thread_count; ++thread_number) {
       unsigned scalars_count = distribution[thread_number];
       if (scalars_count > 0) {
         threads[thread_number] = matrix_mult_parallel_launch_thread(mat1, mat2, mat, scalar_start, scalars_count, thread_number, 1);
@@ -194,7 +195,7 @@ s_matrix matrix_mult_parallel(s_matrix mat1, s_matrix mat2, unsigned thread_coun
       }
     }
 
-    //matrix_mult_parallel_launch_thread(mat1, mat2, mat, 0, distribution[0], 0, 0);
+    matrix_mult_parallel_launch_thread(mat1, mat2, mat, 0, distribution[0], 0, 0);
 
     for (unsigned thread_number = 0; thread_number < thread_count; ++thread_number) {
       pthread_t thread = threads[thread_number];
@@ -237,7 +238,8 @@ void print_time(struct timespec* ts)
   long us = (ts->tv_nsec / 1000) % 1000;
   long ms = (ts->tv_nsec / 1000000) % 1000;
   long s =  (ts->tv_nsec / 1000000000) % 1000 + ts->tv_sec;
-  printf("%3lds %3ldms %3ldus %3ldns", s, ms, us, ns);
+  long t = (s * 1000000000) + (ms * 1000000) + (us * 1000) + ns;
+  printf("%3lds %3ldms %3ldus %3ldns %12ld", s, ms, us, ns, t);
 }
 
 void test(unsigned size, unsigned thread_count)
@@ -256,6 +258,7 @@ void test(unsigned size, unsigned thread_count)
   printf("%3dcpu %3dthreads %4d*%-4d ", get_cpu_count(), thread_count, size, size);
   print_time(&time);
   printf("\n");
+  fflush(stdout);
   matrix_free(mat);
 
 }
@@ -292,15 +295,18 @@ int main(void)
 
   check();
 
-  unsigned sizes[] = {10, 100};
-  unsigned threads_count[] = {1, 4, 16, 64};
+  unsigned sizes[] = {10, 100, 1000, 2000, 5000};
+  unsigned threads_count = get_cpu_count();
+  if (threads_count < 64) {
+    threads_count = 64;
+  }
 
   for (unsigned s = 0; s < sizeof(sizes) / sizeof(*sizes); ++s) {
     unsigned size = sizes[s];
-    test(size, 0);
-    for (unsigned t = 0; t < sizeof(threads_count) / sizeof(*threads_count); ++t) {
-      test(size, threads_count[t]);
+    for (unsigned t = threads_count; t > 1; t /= 2) {
+      test(size, t);
     }
+    test(size, 0);
   }
 
   return 0;

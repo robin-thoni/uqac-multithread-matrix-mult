@@ -1,5 +1,5 @@
 CFLAGS = -Wall -Wextra -Werror -pedantic -std=c99
-LDLIBS = -lpthread
+LDLIBS = -lpthread -lrt
 CC = gcc
 SOURCES = main.c
 OBJS = $(SOURCES:.c=.o)
